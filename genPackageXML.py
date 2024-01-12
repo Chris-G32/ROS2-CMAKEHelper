@@ -77,21 +77,7 @@ class XMLDepHandler(DependencyHandler):
         if self.get_custom_message_folder_flag() or self.get_custom_service_folder_flag():
             msg_dependencies = self.getMessageDependencies()
 
-        # These dependencies are deduced from the code
-        src_dependencies = set()
-        if self.get_includes_folder_flag():
-            #Ros packages should follow this structure, not my choice
-            includePath = package_directory / "include" / package_directory.stem
-            #Verify it is formatted properly
-            assert includePath.exists(), 'Include path is not formatted properly, directory should be of form include/package_name/files.extension'
-            src_dependencies = src_dependencies.union(self.getSourceDependencies(includePath))
-
-        #Get dependencies in source
-        if self.get_source_folder_flag():
-            src_dependencies = src_dependencies.union(self.getSourceDependencies(package_directory/'src'))
-
-        #Clean up includes that may be standard c++ includes, we only care about packages in our workspace or in ROS
-        package_dependencies = self.purgeNonPackages(package_directory.resolve(), src_dependencies)
+        package_dependencies=self.inferSourceDependencies(package_directory)
         package_dep_str = ''
 
         #Format for xml
@@ -105,7 +91,6 @@ class XMLDepHandler(DependencyHandler):
 class PackageXMLGenerator:
     def __init__(self):
         self.config = {}
-        self.msg_dependencies = ""
 
     def load_config(self):
         CONFIG_FILE = "xmlConfig.json"
