@@ -5,161 +5,153 @@ from dependency_handler import DependencyHandler
 import re
 import xml.etree.ElementTree as ET
 
-
 class XMLDepHandler(DependencyHandler):
-    def __init__(self,ros_version):
+    def __init__(self, ros_version):
         super().__init__()
-        self.ros_version=ros_version
+        self.ros_version = ros_version
+    
+    #Const getter for xml msg and srv deps
     def getMessageDependencies(self):
         return "<buildtool_depend>rosidl_default_generators</buildtool_depend>\
-  <exec_depend>rosidl_default_runtime</exec_depend>\
-  <member_of_group>rosidl_interface_packages</member_of_group>"
+                <exec_depend>rosidl_default_runtime</exec_depend>\
+                <member_of_group>rosidl_interface_packages</member_of_group>"
     
-    def get_includes(self,file_path:Path):
-        #Regex that matches includes
+    #Get included files, assumes cpp or hpp file
+    def get_includes(self, file_path: Path):
+        # Regex that matches includes
         include_pattern = re.compile(r'^\s*#include\s*["](.+)["]\s*$')
         includes = set()
-
+        print(file_path)
         with open(file_path, 'r') as file:
-           for line in file:
+            for line in file:
                 match = include_pattern.match(line)
                 if match:
-                   includes.add(match.group(1))
-        # print(f'Includes: {includes}')
+                    includes.add(match.group(1))
         return includes
     
-    def getSourceDependencies(self, directory:Path):
-        included_packages=set()
+    #recursively iterate through directories to get includes
+    def getSourceDependencies(self, directory: Path):
+        included_packages = set()
         for x in directory.iterdir():
-            # print(x)
             if x.is_dir():
-                return self.getSourceDependencies(x)
+                included_packages=included_packages.union(self.getSourceDependencies(x)) 
             else:
-                includes=self.get_includes(x.resolve())
-                included_packages=included_packages.union(includes)
-        # print(f'in src deps: {included_packages}')
+                includes = self.get_includes(x.resolve())
+                included_packages = included_packages.union(includes)
         return included_packages
     
-    def purgeNonPackages(self,package_directory:Path,includes:set):
-        package_candidates=[]
+    #Removes includes that are not a package in the workspace or in ROS
+    def purgeNonPackages(self, package_directory: Path, includes: set):
+        package_candidates = []
 
         for item in includes:
-            split=item.split('/')
-            if(len(split)>1):
+            split = item.split('/')
+            if len(split) > 1:
                 package_candidates.append(split[0])
-        # print(f'Candidates: {package_candidates}')#DBG
+
         parent_directory = package_directory.parent
     
         if not parent_directory.exists():
             return []
         
-        shared_directories=set()
+        shared_directories = set()
         for cand in package_candidates:
-            # print(f"Candidate: {cand}")
-            # print(f"potentialRosPath: {(Path(f'/opt/ros/{self.ros_version}/share')/cand)}")
-            isROSPKG=(Path('/opt/ros/humble/share')/cand).exists()
-            isLocalPKG=(parent_directory/cand).exists()
-            # print(isROSPKG)
+            isROSPKG = (Path(f'/opt/ros/{self.ros_version}/share') / cand).exists()
+            isLocalPKG = (parent_directory / cand).exists()
+            
             if isLocalPKG or isROSPKG:
                 shared_directories.add(cand)
 
         return shared_directories
-    def inferDependecies(self,package_directory:Path): 
-        #Get all subdirs
-        directories=[x for x in package_directory.iterdir() if x.is_dir()]
-        
-        #Set flags for subdirs we care about
+    
+    def inferDependecies(self, package_directory: Path): 
+        #Get directories in package
+        directories = [x for x in package_directory.iterdir() if x.is_dir()]
+
+        #Check if it contains some important directories
         self.setFlags(directories)
-        msg_dependencies=""
-        if self.get_custom_message_folder_flag()or self.get_custom_service_folder_flag():
-            # print("GOT MSG DEPS")
-            msg_dependencies=self.getMessageDependencies()
 
-        
+        #Initialize our msg dependencies as empty
+        msg_dependencies = ""
+        #Add dependencies if it has srv or msg dirs
+        if self.get_custom_message_folder_flag() or self.get_custom_service_folder_flag():
+            msg_dependencies = self.getMessageDependencies()
 
-        src_dependencies=set()
-        if(self.get_includes_folder_flag()):
-            # print("DETECTED INCLUDES")
-           
-            includePath=package_directory/"include"/package_directory.stem
-            # print(includePath.resolve())
-            # print(directories)
-            #Validate structure of includes folder
-            assert (includePath.exists()),'Include path is not formatted properly, directory should be of form include/package_name/files.extension'
+        # These dependencies are deduced from the code
+        src_dependencies = set()
+        if self.get_includes_folder_flag():
+            #Ros packages should follow this structure, not my choice
+            includePath = package_directory / "include" / package_directory.stem
+            #Verify it is formatted properly
+            assert includePath.exists(), 'Include path is not formatted properly, directory should be of form include/package_name/files.extension'
+            src_dependencies = src_dependencies.union(self.getSourceDependencies(includePath))
 
-            src_dependencies=src_dependencies.union(self.getSourceDependencies(includePath))
-            # for i in src_dependencies:
-            #     print(i)
-            
-        if(self.get_source_folder_flag()):
-            src_dependencies=src_dependencies.union(self.getSourceDependencies(package_directory/'src'))
+        #Get dependencies in source
+        if self.get_source_folder_flag():
+            src_dependencies = src_dependencies.union(self.getSourceDependencies(package_directory/'src'))
 
-        package_dependencies=self.purgeNonPackages(package_directory.resolve(),src_dependencies)
-        package_dep_str=''
-        #Format package deps
+        #Clean up includes that may be standard c++ includes, we only care about packages in our workspace or in ROS
+        package_dependencies = self.purgeNonPackages(package_directory.resolve(), src_dependencies)
+        package_dep_str = ''
+
+        #Format for xml
         for i in package_dependencies:
-            if(i!=package_directory.stem):
-                package_dep_str+=f"<depend>{i}</depend>"
-        #Determine necessary dependencies
-        dependencies=f'{msg_dependencies}{package_dep_str}'
-        # print(dependencies)
-        #If msg or srv add the msg dependencies
+            if i != package_directory.stem:
+                package_dep_str += f"<depend>{i}</depend>"
+        #Concat strings, msg deps first
+        dependencies = f'{msg_dependencies}{package_dep_str}'
         return dependencies
 
 class PackageXMLGenerator:
     def __init__(self):
         self.config = {}
-        self.msg_dependencies=""
+        self.msg_dependencies = ""
 
     def load_config(self):
         CONFIG_FILE = "xmlConfig.json"
         with open(CONFIG_FILE, "r") as file:
             self.config = json.load(file)
 
-    # Due to ros constraints, parent folder should be the same as the package directory
-    def generate(self, package_directory:Path):
+    def generate(self, package_directory: Path):
+        #Load config from file
         self.load_config()
+        #Dev info
         name = self.config["name"]
         maintainer_email = self.config["maintainer_email"]
-    
-        #Infer package dependencies by includes
-        inferred_dependencies=XMLDepHandler(self.config['ros_version']).inferDependecies(package_directory)
-
-
-        package_name=package_directory.stem
-
+        #Get dependencies from fiels
+        inferred_dependencies = XMLDepHandler(self.config['ros_version']).inferDependecies(package_directory)
+        package_name = package_directory.stem #Package name must be the stem of the directory
         
-        #Document to write
-        XML_FRAME = f'<?xml version="1.0"?>\
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>\
-<package format="3">\
-  <name>{package_name}</name>\
-  <version>0.0.0</version>\
-  <description>TODO: Package description</description>\
-  <maintainer email="{maintainer_email}">{name}</maintainer>\
-  <license>TODO: License declaration</license>\
-  <buildtool_depend>ament_cmake</buildtool_depend>\
-  <test_depend>ament_lint_auto</test_depend>\
-  <test_depend>ament_lint_common</test_depend>\
-  {inferred_dependencies}\
-  <export>\
-    <build_type>ament_cmake</build_type>\
-  </export>\
-</package>'
+        #Body of the xml
+        XML_FRAME = f'<package format="3">\
+                            <name>{package_name}</name>\
+                            <version>0.0.0</version>\
+                            <description>TODO: Package description</description>\
+                            <maintainer email="{maintainer_email}">{name}</maintainer>\
+                            <license>TODO: License declaration</license>\
+                            <buildtool_depend>ament_cmake</buildtool_depend>\
+                            <test_depend>ament_lint_auto</test_depend>\
+                            <test_depend>ament_lint_common</test_depend>\
+                            {inferred_dependencies}\
+                            <export>\
+                                <build_type>ament_cmake</build_type>\
+                            </export>\
+                        </package>'
         return XML_FRAME
-    def createPackageXML(self,package_directory:Path,outputTo:Path):
-        XML_HEADING='<?xml version="1.0"?>\n\
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>\n'
-        xmlStr=self.generate(package_directory)
+    
+    def createPackageXML(self, package_directory: Path, outputTo: Path):
+        #The heading used in ros humble package XML, may vary but idk or care
+        XML_HEADING = '<?xml version="1.0"?>\n<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>\n'
+        #Generate the xml body for the package
+        xmlStr = self.generate(package_directory)
+        #Convert it into xml ob for formatting
+        element = ET.XML(xmlStr)
+        ET.indent(element)#Format
 
-        #Make it look nice
-        element=ET.XML(xmlStr)
-        ET.indent(element)
+        #Create output dir if it doesnt exist
+        os.makedirs(outputTo, exist_ok=True)
 
-        #Make directory of it doesn't exist
-        os.makedirs(outputTo,exist_ok=True)
-
-        #Save to file
+        #Write file
         with open(outputTo/'package.xml', 'w') as package_xml_file:
             package_xml_file.write(XML_HEADING)
             package_xml_file.write(ET.tostring(element, encoding='unicode'))
