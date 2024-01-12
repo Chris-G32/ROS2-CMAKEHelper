@@ -14,7 +14,7 @@ def hello(name: str):
 
 @app.command(help="Generates and outputs the cmakelists.txt and package.xml files")
 def generate(package_directory: str,
-    outputTo: Annotated[str, typer.Option(help="Where to output the generated files. Defaults to package_directory/generated")] = None,        
+    output: Annotated[str, typer.Option(help="Where to output the generated files. Defaults to package_directory/generated")] = None,        
     c: Annotated[bool, typer.Option(help="CMakeLists.txt")] = None,
     p: Annotated[bool, typer.Option(help="Generate package.xml")] = None):
     
@@ -39,9 +39,9 @@ def generate(package_directory: str,
             GENERATED_DIRECTORY=(package_path/"GENERATED").resolve()
             #Generate xml doc
             packageXMLGen=genPackageXML.PackageXMLGenerator()
-            if outputTo==None:
-                outputTo=GENERATED_DIRECTORY
-            packageXMLGen.createPackageXML(package_path,outputTo)
+            if output==None:
+                output=GENERATED_DIRECTORY
+            packageXMLGen.createPackageXML(package_path,Path(output))
             print("Generated package.xml")
             
     # with open(GENERATED_DIRECTORY+'CMakeLists.txt', 'w') as cmakelists_file:
