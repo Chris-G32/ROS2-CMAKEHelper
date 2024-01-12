@@ -1,4 +1,5 @@
 {
-    "name": "Your Name",
-    "maintainer_email": "your.email@example.com"
+    "name": "Chris Gruska",
+    "maintainer_email": "cgruska@kent.edu",
+    "ros_version":"humble"
   }

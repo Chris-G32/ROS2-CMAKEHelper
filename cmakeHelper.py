@@ -14,47 +14,38 @@ def hello(name: str):
 
 @app.command(help="Generates and outputs the cmakelists.txt and package.xml files")
 def generate(package_directory: str,
-    c: Annotated[bool, typer.Option(help="CMakeLists.txt")] = None,p: Annotated[bool, typer.Option(help="Generate package.xml")] = None):
+    outputTo: Annotated[str, typer.Option(help="Where to output the generated files. Defaults to package_directory/generated")] = None,        
+    c: Annotated[bool, typer.Option(help="CMakeLists.txt")] = None,
+    p: Annotated[bool, typer.Option(help="Generate package.xml")] = None):
     
     #Cross platform absolute path
-    package_path=Path(package_directory)
+    package_path=Path(package_directory).resolve()
 
     #Verify real directory
     if not package_path.exists():
-        raise FileNotFoundError(f"Could not find {package_directory} !")
+        raise FileNotFoundError(f"Could not find {package_path} !")
     
-    #Directory for generated files
-    GENERATED_DIRECTORY=package_directory+"GENERATED/"
-    #Make the generated dir if it doesnt exist
-    os.makedirs(package_directory+GENERATED_DIRECTORY,exist_ok=True)
-
     #Do both if args not specified
     if c==None and p==None:
         #Gen Both
         print("Generated CMakeLists and package.xml")
         pass
     else:
-        if c==True:
-            #Gen cMake
-            print("Generated CMakeLists.txt")
-            pass
+        # if c==True:
+        #     #Gen cMake
+        #     print("Generated CMakeLists.txt")
+        #     pass
         if p==True:
-            #Gen package xml
-            print("Generated package.xml")
+            GENERATED_DIRECTORY=(package_path/"GENERATED").resolve()
             #Generate xml doc
             packageXMLGen=genPackageXML.PackageXMLGenerator()
-            xmlStr=packageXMLGen.generate(package_directory)
-
-            #Make it look nice
-            element=ET.XML(xmlStr)
-            ET.indent(element)
-
-            #Save to file
-            with open(GENERATED_DIRECTORY+'package.xml', 'w') as package_xml_file:
-                package_xml_file.write(ET.tostring(element, encoding='unicode'))
+            if outputTo==None:
+                outputTo=GENERATED_DIRECTORY
+            packageXMLGen.createPackageXML(package_path,outputTo)
+            print("Generated package.xml")
             
-    with open(GENERATED_DIRECTORY+'CMakeLists.txt', 'w') as cmakelists_file:
-        cmakelists_file.write(package_directory)
+    # with open(GENERATED_DIRECTORY+'CMakeLists.txt', 'w') as cmakelists_file:
+    #     cmakelists_file.write(package_directory)
 
 
 
