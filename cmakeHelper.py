@@ -25,24 +25,21 @@ def generate(package_directory: str,
     if not package_path.exists():
         raise FileNotFoundError(f"Could not find {package_path} !")
     
-    #Do both if args not specified
-    if c==None and p==None:
-        #Gen Both
-        print("Generated CMakeLists and package.xml")
+    noFlagsSet=(c==None and p==None)
+    
+
+    if c==True or noFlagsSet==True:
+        #Gen cMake
+        print("Generated CMakeLists.txt")
         pass
-    else:
-        # if c==True:
-        #     #Gen cMake
-        #     print("Generated CMakeLists.txt")
-        #     pass
-        if p==True:
-            GENERATED_DIRECTORY=(package_path/"GENERATED").resolve()
-            #Generate xml doc
-            packageXMLGen=genPackageXML.PackageXMLGenerator()
-            if output==None:
-                output=GENERATED_DIRECTORY
-            packageXMLGen.createPackageXML(package_path,Path(output))
-            print("Generated package.xml")
+    if p==True or noFlagsSet==True:
+        GENERATED_DIRECTORY=(package_path/"GENERATED").resolve()
+        #Generate xml doc
+        packageXMLGen=genPackageXML.PackageXMLGenerator()
+        if output==None:
+            output=GENERATED_DIRECTORY
+        packageXMLGen.createPackageXML(package_path,Path(output))
+        print("Generated package.xml")
             
     # with open(GENERATED_DIRECTORY+'CMakeLists.txt', 'w') as cmakelists_file:
     #     cmakelists_file.write(package_directory)
