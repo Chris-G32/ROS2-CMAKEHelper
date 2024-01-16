@@ -1,4 +1,14 @@
 import json
+from pathlib import Path
+from dependency_handler import DependencyHandler
+
+class CMAKEDepHandler(DependencyHandler):
+    def __init__(self) -> None:
+        super().__init__()
+    def inferDependecies(self,package_directory:Path):
+        source_dependencies=self.inferSourceDependencies(package_directory)
+
+
 class CMAKEListsGenerator:
     def __init__(self):
         self.config = {}
@@ -15,9 +25,13 @@ class CMAKEListsGenerator:
         name = self.config["name"]
         maintainer_email = self.config["maintainer_email"]
         #Get dependencies from fiels
-        inferred_dependencies = XMLDepHandler(self.config['ros_version']).inferDependecies(package_directory)
+        inferred_dependencies = CMAKEDepHandler().inferDependecies(package_directory)
         package_name = package_directory.stem #Package name must be the stem of the directory
-        
+        CMAKE_HEAD=f'cmake_minimum_required(VERSION 3.8)\
+project({package_directory.stem})\
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")\
+  add_compile_options(-Wall -Wextra -Wpedantic)\
+endif()'
         #Body of the xml
         CMAKE_FRAME = f'<package format="3">\
                             <name>{package_name}</name>\
@@ -35,7 +49,7 @@ class CMAKEListsGenerator:
                         </package>'
         return XML_FRAME
     
-    def createPackageXML(self, package_directory: Path, outputTo: Path):
+    def createCMakeLists(self, package_directory: Path, outputTo: Path):
         #The heading used in ros humble package XML, may vary but idk or care
         XML_HEADING = '<?xml version="1.0"?>\n<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>\n'
         #Generate the xml body for the package
@@ -51,3 +65,5 @@ class CMAKEListsGenerator:
         with open(outputTo/'package.xml', 'w') as package_xml_file:
             package_xml_file.write(XML_HEADING)
             package_xml_file.write(ET.tostring(element, encoding='unicode'))
+        a=str()
+        a.find

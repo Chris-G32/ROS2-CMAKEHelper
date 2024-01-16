@@ -21,7 +21,6 @@ class XMLDepHandler(DependencyHandler):
         # Regex that matches includes
         include_pattern = re.compile(r'^\s*#include\s*["](.+)["]\s*$')
         includes = set()
-        print(file_path)
         with open(file_path, 'r') as file:
             for line in file:
                 match = include_pattern.match(line)
